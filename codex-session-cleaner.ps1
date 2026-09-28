@@ -92,7 +92,7 @@ if (-not $Delete) {
     exit 0
 }
 
-$selection = Read-Host "输入要删除的编号（可用逗号分隔，或输入 all）"
+$selection = Read-Host 'Enter numbers to delete (comma-separated), or all'
 if ($selection -eq 'all') {
     $chosen = $sessions
 } else {
@@ -120,6 +120,7 @@ foreach ($session in $chosen) {
         Write-Host "Deleted: $($session.Title)" -ForegroundColor Green
     }
 }
+
 
 
 
