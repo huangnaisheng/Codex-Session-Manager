@@ -65,7 +65,7 @@ function Get-SessionSummary {
 
 $sessionRoot = Join-Path $CodexHome 'sessions'
 if (-not (Test-Path -LiteralPath $sessionRoot)) {
-    throw "找不到会话目录: $sessionRoot"
+    throw "Session directory not found: $sessionRoot"
 }
 
 $sessions = @(Get-ChildItem -LiteralPath $sessionRoot -Recurse -Filter '*.jsonl' -File |
@@ -77,7 +77,7 @@ if ($Query) {
 }
 
 if (-not $sessions) {
-    Write-Host '没有匹配的会话。'
+    Write-Host 'No matching sessions found.'
     exit 0
 }
 
@@ -88,7 +88,7 @@ for ($i = 0; $i -lt $sessions.Count; $i++) {
 }
 
 if (-not $Delete) {
-    Write-Host "`n只查看模式。按标题筛选示例: .\codex-session-cleaner.ps1 -Query '关键词'"
+    Write-Host "`nRead-only mode. Example filter: .\\codex-session-cleaner.ps1 -Query 'keyword'"
     exit 0
 }
 
@@ -102,12 +102,12 @@ if ($selection -eq 'all') {
 
 if (-not $chosen) { throw '没有选择有效的会话编号。' }
 
-Write-Host "`n将删除以下会话：" -ForegroundColor Yellow
+Write-Host "`nThe following sessions will be deleted:" -ForegroundColor Yellow
 $chosen | ForEach-Object { Write-Host ('- [{0}] {1}' -f $_.Id, $_.Title) }
 if (-not $Force) {
     $answer = Read-Host '确认永久删除？输入 DELETE 继续'
     if ($answer -cne 'DELETE') {
-        Write-Host '已取消。'
+        Write-Host 'Cancelled.'
         exit 0
     }
 }
@@ -115,9 +115,10 @@ if (-not $Force) {
 foreach ($session in $chosen) {
     & codex delete $session.Id --force
     if ($LASTEXITCODE -ne 0) {
-        Write-Warning "删除失败: $($session.Id)"
+        Write-Warning "Delete failed: $($session.Id)"
     } else {
-        Write-Host "已删除: $($session.Title)" -ForegroundColor Green
+        Write-Host "Deleted: $($session.Title)" -ForegroundColor Green
     }
 }
+
 
