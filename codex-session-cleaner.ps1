@@ -51,7 +51,7 @@ function Get-SessionSummary {
         if ($title) { break }
     }
 
-    if (-not $title) { $title = '(未找到用户标题)' }
+    if (-not $title) { $title = '(No user title found)' }
     $title = (($title -replace '\s+', ' ').Trim())
     if ($title.Length -gt 120) { $title = $title.Substring(0, 120) + '...' }
 
@@ -100,12 +100,12 @@ if ($selection -eq 'all') {
     $chosen = @($indexes | Where-Object { $_ -ge 1 -and $_ -le $sessions.Count } | ForEach-Object { $sessions[$_ - 1] })
 }
 
-if (-not $chosen) { throw '没有选择有效的会话编号。' }
+if (-not $chosen) { throw 'No valid session numbers were selected.' }
 
 Write-Host "`nThe following sessions will be deleted:" -ForegroundColor Yellow
 $chosen | ForEach-Object { Write-Host ('- [{0}] {1}' -f $_.Id, $_.Title) }
 if (-not $Force) {
-    $answer = Read-Host '确认永久删除？输入 DELETE 继续'
+    $answer = Read-Host 'Permanently delete these sessions? Type DELETE to continue'
     if ($answer -cne 'DELETE') {
         Write-Host 'Cancelled.'
         exit 0
@@ -120,5 +120,6 @@ foreach ($session in $chosen) {
         Write-Host "Deleted: $($session.Title)" -ForegroundColor Green
     }
 }
+
 
 
