@@ -8,6 +8,7 @@ A small PowerShell utility for finding local Codex CLI sessions by title and cle
 - Extracts the first user message as a readable session title.
 - Shows the title, last modified time, and session UUID together.
 - Filters sessions by a title keyword.
+- Provides an interactive terminal selector for deletion: arrow keys move, Space toggles, and Enter confirms the selection.
 - Lists all selected sessions before deletion and requires typing `DELETE`.
 - Runs `codex delete <UUID> --force` instead of modifying session files directly.
 
@@ -20,7 +21,15 @@ Set-Location 'D:\Study\codex\会话管理器'
 .\codex-session-cleaner.ps1 -Query 'only reply ok' -Delete
 ```
 
-After the script displays the matches, enter one number, comma-separated numbers, or `all`. The script then asks for the uppercase confirmation word `DELETE`.
+In deletion mode, use the interactive selector:
+
+- `Up` / `Down`: move the cursor
+- `Space`: select or clear the highlighted session
+- `A`: select all; `N`: clear all
+- `Enter`: review the selected sessions
+- `Esc` or `Q`: cancel
+
+The script then asks for the uppercase confirmation word `DELETE`. When output is redirected or an interactive console is unavailable, it falls back to comma-separated numbers or `all`.
 
 For trusted automation, skip the confirmation prompt with `-Force`:
 
