@@ -1,0 +1,8 @@
+# Local editor and PowerShell artifacts
+.vscode/
+*.bak
+*.tmp
+
+# Never commit local Codex session data
+.codex/
+sessions/
