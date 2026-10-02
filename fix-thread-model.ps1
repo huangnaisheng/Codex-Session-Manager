@@ -4,16 +4,16 @@
 
 .DESCRIPTION
     Codex records the model each session used in state_5.sqlite, table threads,
-    column model. Resuming an old session (codex resume) reads that value instead
-    of the global model in config.toml -- which is why changing the default leaves
-    old sessions on the old model. This script rewrites it in bulk.
+    column model. codex resume reads that value instead of the global model in
+    config.toml, so changing the default leaves old sessions on the old model.
+    This script rewrites the stored value.
 
-    Before writing, it probes state_5.sqlite (and its -wal/-shm companions) for an
-    exclusive handle and refuses to run while any of them is still held, because
-    the app-server daemon caches thread metadata in memory and would write it back
-    over the change. The probe is on the file handle, not the process name:
-    codex-windows-sandbox-service.exe starts with Windows, cannot be stopped by
-    signing out, and never touches thread metadata, so it is harmless here.
+    The app-server daemon caches thread metadata in memory and keeps
+    state_5.sqlite open, so it has to be closed first. The script checks by trying
+    to open the database files with FileShare.None, and refuses to run while any
+    of them is held. It does not check process names:
+    codex-windows-sandbox-service.exe starts with Windows, survives signing out,
+    and never touches thread metadata.
 
     state_5.sqlite is backed up before anything is modified.
 
@@ -24,7 +24,7 @@
     Optional. Also set the reasoning effort: low / medium / high / minimal
 
 .PARAMETER Id
-    Optional. Restrict the change to these session ids. By default every session
+    Optional. Restrict the change to these session ids. Without it, every session
     whose model differs from the target is rewritten.
 
 .PARAMETER DryRun

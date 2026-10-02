@@ -1,27 +1,26 @@
 # Codex Session Manager
 
-Two PowerShell utilities for inspecting and editing the local session data the
-Codex CLI keeps under `%USERPROFILE%\.codex`.
+Two PowerShell scripts for working with the local session data the Codex CLI
+stores under `%USERPROFILE%\.codex`.
 
-| Script | Purpose |
-| --- | --- |
-| `codex-session-cleaner.ps1` | Browse saved sessions by title and delete them through `codex delete` |
-| `fix-thread-model.ps1` | Bulk-rewrite the model bound to saved sessions |
+- `codex-session-cleaner.ps1` lists saved sessions by title and deletes them
+  through `codex delete`.
+- `fix-thread-model.ps1` rewrites the model that saved sessions are bound to.
 
 ## Requirements
 
 - Windows PowerShell 5.1 or PowerShell 7+
-- Codex CLI installed and available as the `codex` command
-- Node.js 22.5+ for `fix-thread-model.ps1`, which uses the built-in `node:sqlite` module
+- Codex CLI on `PATH`
+- Node.js 22.5+, needed by `fix-thread-model.ps1` for `node:sqlite`
 
-Both scripts take `-CodexHome` if your Codex data directory is not the default.
+Both scripts accept `-CodexHome` if your Codex data directory is not the default.
 
 ## Cleaning up sessions
 
-`codex-session-cleaner.ps1` scans the `.jsonl` files under `.codex\sessions`,
-extracts the first user message from each as a readable title, and shows the
-title, last modified time and session UUID together. Deletion runs
-`codex delete <UUID> --force` instead of modifying session files directly.
+The cleaner reads the `.jsonl` files under `.codex\sessions`, takes the first user
+message from each as a title, and prints the title, last modified time and session
+UUID. Deletion goes through `codex delete <UUID> --force`, so session files are
+never edited directly.
 
 ```powershell
 .\codex-session-cleaner.ps1
@@ -30,71 +29,69 @@ title, last modified time and session UUID together. Deletion runs
 .\codex-session-cleaner.ps1 -CodexHome 'C:\AnotherUser\.codex'
 ```
 
-The first command scans all sessions and immediately opens the visual selector.
-Use `-Query` when you want to narrow the list by title keyword first. The old
-`-Delete` switch is still accepted for compatibility, but it is no longer needed.
+Run it with no arguments to scan everything and open the selector. `-Query`
+narrows the list by title keyword first. The old `-Delete` switch still works but
+is no longer needed.
 
-### Interactive selector
+In the selector:
 
 | Key | Action |
 | --- | --- |
-| `Up` / `Down` | Move the cursor |
-| `Space` | Select or clear the highlighted session |
-| `A` / `N` | Select all / clear all |
-| `Enter` | Review the selected sessions |
-| `Esc` / `Q` | Cancel |
+| `Up` / `Down` | move the cursor |
+| `Space` | select or clear the highlighted session |
+| `A` / `N` | select all / clear all |
+| `Enter` | review the selection |
+| `Esc` / `Q` | cancel |
 
-The script then lists the selection again and asks for the uppercase confirmation
-word `DELETE`. When output is redirected or an interactive console is unavailable,
-it falls back to comma-separated numbers or `all`. For trusted automation, skip
-the final confirmation prompt with `-Force`.
+It then prints the selection and asks for the word `DELETE`. If output is
+redirected or there is no interactive console, it accepts comma-separated numbers
+or `all` instead. `-Force` skips the prompt.
 
 ## Changing the model of saved sessions
 
-Codex stores the model each session used in `state_5.sqlite`, table `threads`,
-column `model`. Resuming an old session reads that value instead of the global
-`model` in `config.toml` — which is why old sessions keep using an old model even
-after you change the default. `fix-thread-model.ps1` rewrites it.
+Codex stores the model for each session in `state_5.sqlite`, in the `threads`
+table. `codex resume` reads that value, not the global `model` in `config.toml`.
+Changing the default therefore leaves existing sessions on their old model.
+`fix-thread-model.ps1` rewrites the stored value.
 
 ```powershell
-# Preview only, nothing is written
+# Preview only
 .\fix-thread-model.ps1 -Model gpt-6.1-sol -DryRun
 
-# Rewrite every session whose model differs, and set the reasoning effort too
+# Rewrite every session not already on this model, and set reasoning effort
 .\fix-thread-model.ps1 -Model gpt-6.1-sol -Effort high
 
-# Only specific sessions
+# Rewrite specific sessions only
 .\fix-thread-model.ps1 -Model gpt-6.1-sol -Id 01a0f31c-18c5-7fe1-8889-8326ca8a28ba
 ```
 
-Run `-DryRun` first. Without `-Id` the script rewrites *every* session whose model
-differs from the target, which may include sessions you meant to leave alone. It
-also overwrites `reasoning_effort` when `-Effort` is given, and raising the effort
-increases token usage on those sessions.
+Preview with `-DryRun` first. Without `-Id`, every session whose model differs
+gets rewritten, including ones you may have wanted to leave alone. If you pass
+`-Effort`, `reasoning_effort` is overwritten too, which raises token usage on
+those sessions.
 
-Before writing anything it copies `state_5.sqlite`, together with its `-wal` and
-`-shm` companions, to timestamped `.bak-*` files, and the update runs inside a
-transaction that rolls back on failure.
+Before writing, the script copies `state_5.sqlite` and its `-wal`/`-shm`
+companions to `.bak-*` files. The update is one transaction and rolls back on
+failure.
 
-### The app-server daemon must be closed first
+### Close the app-server daemon first
 
-The daemon caches thread metadata in memory and holds an open handle on
-`state_5.sqlite`, so it would write the old model back over the change — and even
-without that, the new value would not show up until a restart.
+The daemon caches thread metadata in memory and keeps `state_5.sqlite` open. While
+it is running it can write the old model back, and the new value would not show up
+until a restart anyway.
 
-The guard is a **handle probe, not a process-name check**: the script tries to
-open `state_5.sqlite` (plus `-wal`/`-shm`) with `FileShare.None` and refuses to
-run while any of them is still held. The distinction matters because
-`codex-windows-sandbox-service.exe` is an auto-start Windows service that signing
-out does not stop, yet it never touches thread metadata and is safe to leave
-running. `-Force` bypasses the probe.
+The script checks by trying to open `state_5.sqlite`, `-wal` and `-shm` with
+`FileShare.None`, and refuses to run if any of them is held. It does not look at
+process names, because `codex-windows-sandbox-service.exe` starts with Windows,
+survives signing out, and never touches thread metadata. That one can stay
+running. `-Force` skips the check.
 
 To release the handle, sign out of Windows, or end the `codex.exe app-server`
 daemon and its `codex-code-mode-host.exe` child. Closing the GUI is not enough:
-the daemon is left behind as an orphan process when the app exits.
+the daemon is left behind as an orphan when the app exits.
 
-A single session can be changed without touching the database at all — resume it
-with an explicit model and the next turn is recorded under that model:
+To fix one session without touching the database, resume it with an explicit
+model:
 
 ```powershell
 codex resume 01a0f31c-18c5-7fe1-8889-8326ca8a28ba -m gpt-6.1-sol
@@ -102,13 +99,13 @@ codex resume 01a0f31c-18c5-7fe1-8889-8326ca8a28ba -m gpt-6.1-sol
 
 ## Safety
 
-`codex delete` permanently removes a saved session. The selector always shows the
-selected sessions again and requires explicit confirmation unless `-Force` is
-supplied. Always verify the titles and UUIDs before confirming.
+`codex delete` removes a session permanently. The selector shows the selection
+again and asks for confirmation unless `-Force` is given, so check the titles and
+UUIDs before typing `DELETE`.
 
-`fix-thread-model.ps1` writes to `state_5.sqlite` directly. It backs the database
-up first and rolls back on failure, but quit Codex before running it and keep the
-`.bak-*` files until you have confirmed the result.
+`fix-thread-model.ps1` writes to `state_5.sqlite` directly. It backs the file up
+first and rolls back failed writes, but close Codex before running it and keep the
+`.bak-*` files until you have checked the result.
 
 ## License
 
