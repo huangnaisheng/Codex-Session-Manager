@@ -139,7 +139,7 @@ the model list your provider serves from `/v1/models`. `-m`/`--model` and
 
 There is a remote refresh path, cached in `.codex\models_cache.json` and gated on
 a ChatGPT login or on the provider advertising an authoritative catalog plus
-`features.api_key_model_discovery`. A relay such as ccapi does not qualify:
+`features.api_key_model_discovery`. A third-party relay does not qualify:
 `codex debug models -c features.api_key_model_discovery=true` returns
 byte-identical output and writes no cache file.
 
