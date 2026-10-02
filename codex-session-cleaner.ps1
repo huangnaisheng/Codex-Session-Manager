@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Query,
+    # Kept for compatibility with older commands; selection is now the default.
     [switch]$Delete,
     [switch]$Force,
     [string]$CodexHome = (Join-Path $env:USERPROFILE '.codex')
@@ -143,17 +144,6 @@ if ($Query) {
 
 if (-not $sessions) {
     Write-Host 'No matching sessions found.'
-    exit 0
-}
-
-for ($i = 0; $i -lt $sessions.Count; $i++) {
-    $s = $sessions[$i]
-    Write-Host (('[{0}] {1}  {2}' -f ($i + 1), $s.LastWrite.ToString('yyyy-MM-dd HH:mm'), $s.Title))
-    Write-Host ('    UUID: {0}' -f $s.Id) -ForegroundColor DarkGray
-}
-
-if (-not $Delete) {
-    Write-Host "`nRead-only mode. Example filter: .\\codex-session-cleaner.ps1 -Query 'keyword'"
     exit 0
 }
 

@@ -18,8 +18,9 @@ A small PowerShell utility for finding local Codex CLI sessions by title and cle
 Set-Location 'D:\Study\codex\会话管理器'
 .\codex-session-cleaner.ps1
 .\codex-session-cleaner.ps1 -Query 'only reply ok'
-.\codex-session-cleaner.ps1 -Query 'only reply ok' -Delete
 ```
+
+The first command scans all sessions and immediately opens the visual selector. Use `-Query` when you want to narrow the list first. The old `-Delete` switch is still accepted for compatibility, but it is no longer needed.
 
 In deletion mode, use the interactive selector:
 
@@ -31,10 +32,10 @@ In deletion mode, use the interactive selector:
 
 The script then asks for the uppercase confirmation word `DELETE`. When output is redirected or an interactive console is unavailable, it falls back to comma-separated numbers or `all`.
 
-For trusted automation, skip the confirmation prompt with `-Force`:
+For trusted automation, skip the final confirmation prompt with `-Force`:
 
 ```powershell
-.\codex-session-cleaner.ps1 -Query 'test session' -Delete -Force
+.\codex-session-cleaner.ps1 -Query 'test session' -Force
 ```
 
 Use a different Codex data directory:
@@ -50,7 +51,7 @@ Use a different Codex data directory:
 
 ## Safety
 
-`codex delete` permanently removes a saved session. Without `-Delete`, the script is read-only. Deletion mode shows the selected sessions again and requires explicit confirmation. Always verify the numbers, titles, and UUIDs before confirming.
+`codex delete` permanently removes a saved session. The selector always shows the selected sessions again and requires explicit confirmation unless `-Force` is supplied. Always verify the titles and UUIDs before confirming.
 
 ## License
 
