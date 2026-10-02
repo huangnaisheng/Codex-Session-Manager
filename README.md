@@ -1,12 +1,14 @@
 # Codex Session Manager
 
-Two PowerShell scripts for working with the local session data the Codex CLI
-stores under `%USERPROFILE%\.codex`.
+Three PowerShell scripts for working with the local data the Codex CLI stores
+under `%USERPROFILE%\.codex`.
 
 - `codex-session-cleaner.ps1` lists saved sessions by title and deletes them
   through `codex delete`.
 - `fix-thread-model.ps1` rewrites the model that saved sessions are bound to, and
   refuses to do so for sessions that already have turns.
+- `patch-model-catalog.ps1` edits the model catalog compiled into `codex.exe`, so
+  the `/model` picker can list models the binary was never built with.
 
 [MODEL-BINDING.md](MODEL-BINDING.md) has the measurements behind that refusal.
 
@@ -14,9 +16,12 @@ stores under `%USERPROFILE%\.codex`.
 
 - Windows PowerShell 5.1 or PowerShell 7+
 - Codex CLI on `PATH`
-- Node.js 22.5+, needed by `fix-thread-model.ps1` for `node:sqlite`
+- Node.js 22.5+, needed by `fix-thread-model.ps1` for `node:sqlite` and by
+  `patch-model-catalog.ps1` for the binary rewrite
 
-Both scripts accept `-CodexHome` if your Codex data directory is not the default.
+The session scripts accept `-CodexHome` if your Codex data directory is not the
+default. `patch-model-catalog.ps1` takes `-Target` instead, and finds the binary
+behind the `codex` command on its own.
 
 ## Cleaning up sessions
 
@@ -111,6 +116,60 @@ codex exec fork 01a0f31c-18c5-7fe1-8889-8326ca8a28ba -m gpt-6.1-sol --skip-git-r
 Keep the source session. A fork does not copy history, it references the source
 rollout file, so deleting the source destroys the fork. `codex exec fork` needs a
 prompt, so every headless fork spends one turn on the target model.
+
+## Adding models to the `/model` picker
+
+The picker does not read your provider. It renders a catalog compiled into
+`codex.exe`:
+
+```rust
+// codex-rs/models-manager/src/lib.rs
+serde_json::from_str(include_str!("../models.json"))
+```
+
+`codex debug models` prints that catalog. On 0.160.0 it holds 11 entries and 8 of
+them are visible. The picker keeps only entries with `"visibility": "list"` and
+`supported_in_api = true`, so a catalog entry is not the same thing as a picker
+entry.
+
+Nothing in `config.toml` adds one. `[profiles.*]` and `[model_providers.*]` never
+appear in the picker (openai/codex#22160, closed as not planned), and neither does
+the model list your provider serves from `/v1/models`. `-m`/`--model` and
+`model = "..."` still accept any slug, they just do not list it.
+
+There is a remote refresh path, cached in `.codex\models_cache.json` and gated on
+a ChatGPT login or on the provider advertising an authoritative catalog plus
+`features.api_key_model_discovery`. A relay such as ccapi does not qualify:
+`codex debug models -c features.api_key_model_discovery=true` returns
+byte-identical output and writes no cache file.
+
+`patch-model-catalog.ps1` rewrites the compiled-in catalog instead. The catalog
+is one contiguous JSON literal in the image, and JSON ignores whitespace, so the
+rebuilt catalog is padded back to its exact original byte length and every later
+offset stays valid.
+
+```powershell
+# Print the current catalog. A dry run never writes and never backs up.
+.\patch-model-catalog.ps1 -DryRun
+
+# Trade entries the relay does not serve for entries it does.
+.\patch-model-catalog.ps1 -Rename 'gpt-6-luna=cursor-5.5=Cursor 5.5','gpt-5.6-luna=gpt-5.5-pro=GPT-5.5 Pro'
+
+# Real new entries, paid for by dropping ones you do not use.
+.\patch-model-catalog.ps1 -Drop gpt-daybreak-blue-latest -Drop gpt-daybreak-red-latest -Add 'gpt-5.5|gpt-5.5-pro|GPT-5.5 Pro'
+```
+
+`-Rename`, `-Add`, `-Drop`, `-Show`, `-Hide` and `-Priority` are comma-separated
+arrays, so write `-Drop a,b` rather than repeating `-Drop`. The catalog cannot
+grow by more bytes than the literal already occupies, which is why `-Add` needs
+room freed by `-Drop`; the script refuses the run if it does not fit. The rebuilt
+catalog is re-parsed and length-checked before anything is written, and the
+binary is copied to `.bak-model-catalog-<timestamp>` first.
+
+Close Codex first. Windows keeps a running executable open for reading only, so
+the write fails with `EBUSY` while any `codex.exe` is alive, including an open
+TUI session. `codex update` replaces the binary and discards the patch. The patch
+also invalidates the binary's Authenticode signature; Windows still loads it.
 
 ## Safety
 
