@@ -5,7 +5,10 @@ stores under `%USERPROFILE%\.codex`.
 
 - `codex-session-cleaner.ps1` lists saved sessions by title and deletes them
   through `codex delete`.
-- `fix-thread-model.ps1` rewrites the model that saved sessions are bound to.
+- `fix-thread-model.ps1` rewrites the model that saved sessions are bound to, and
+  refuses to do so for sessions that already have turns.
+
+[MODEL-BINDING.md](MODEL-BINDING.md) has the measurements behind that refusal.
 
 ## Requirements
 
@@ -54,25 +57,33 @@ table. `codex resume` reads that value, not the global `model` in `config.toml`.
 Changing the default therefore leaves existing sessions on their old model.
 `fix-thread-model.ps1` rewrites the stored value.
 
+Rewriting it is only safe for sessions that have no turns yet. A session that
+already has turns replays stored history, and that history only resolves on the
+model that produced it. Switch the model and the provider rejects the replay with
+`invalid_request`, and the session stops working. Putting the old value back does
+not repair it. The script refuses those sessions.
+
 ```powershell
-# Preview only
+# Preview. A dry run writes nothing and refuses nothing.
 .\fix-thread-model.ps1 -Model gpt-6.1-sol -DryRun
 
-# Rewrite every session not already on this model, and set reasoning effort
+# Rewrite every session not already on this model. Sessions with turns are refused.
 .\fix-thread-model.ps1 -Model gpt-6.1-sol -Effort high
 
-# Rewrite specific sessions only
+# Limit the run to specific sessions
 .\fix-thread-model.ps1 -Model gpt-6.1-sol -Id 01a0f31c-18c5-7fe1-8889-8326ca8a28ba
+
+# Write anyway, accepting that those sessions stop resuming
+.\fix-thread-model.ps1 -Model gpt-6.1-sol -Id 01a0f31c-18c5-7fe1-8889-8326ca8a28ba -Force
 ```
 
-Preview with `-DryRun` first. Without `-Id`, every session whose model differs
-gets rewritten, including ones you may have wanted to leave alone. If you pass
-`-Effort`, `reasoning_effort` is overwritten too, which raises token usage on
-those sessions.
+Without `-Id`, every session whose model differs is a target. If you pass
+`-Effort`, `reasoning_effort` is overwritten too. Changing only the effort, while
+the model stays the same, is not a model change and is allowed.
 
 Before writing, the script copies `state_5.sqlite` and its `-wal`/`-shm`
 companions to `.bak-*` files. The update is one transaction and rolls back on
-failure.
+failure. A refused run never reaches the backup, so it leaves nothing behind.
 
 ### Close the app-server daemon first
 
@@ -90,12 +101,16 @@ To release the handle, sign out of Windows, or end the `codex.exe app-server`
 daemon and its `codex-code-mode-host.exe` child. Closing the GUI is not enough:
 the daemon is left behind as an orphan when the app exits.
 
-To fix one session without touching the database, resume it with an explicit
-model:
+Passing `-m` to `codex resume` runs into the same problem, because it also
+changes the model of a session that already has history. Fork instead:
 
 ```powershell
-codex resume 01a0f31c-18c5-7fe1-8889-8326ca8a28ba -m gpt-6.1-sol
+codex exec fork 01a0f31c-18c5-7fe1-8889-8326ca8a28ba -m gpt-6.1-sol --skip-git-repo-check "<prompt>"
 ```
+
+Keep the source session. A fork does not copy history, it references the source
+rollout file, so deleting the source destroys the fork. `codex exec fork` needs a
+prompt, so every headless fork spends one turn on the target model.
 
 ## Safety
 
@@ -105,7 +120,10 @@ UUIDs before typing `DELETE`.
 
 `fix-thread-model.ps1` writes to `state_5.sqlite` directly. It backs the file up
 first and rolls back failed writes, but close Codex before running it and keep the
-`.bak-*` files until you have checked the result.
+`.bak-*` files until you have checked the result. `-Force` does two things: it
+overrides the refusal to rewrite sessions that already have turns, and it skips
+the database handle check. Use it only for a case you have already reasoned
+through.
 
 ## License
 
